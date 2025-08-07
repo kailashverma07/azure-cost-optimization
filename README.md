@@ -83,19 +83,19 @@ Enable monitoring
 Gradually clean Cosmos DB records >90 days
 
 Summary Table
-Feature / Constraint	Met?	Solution
-Simplicity	Yes	Serverless Azure Function, native storage solution
-No Data Loss / Downtime	Yes	Gradual migration, no user impact
-API Contracts Unchanged	Yes	Access logic is hidden, API remains the same
-Cost Optimization	Yes	Blob Storage is 90%+ cheaper than Cosmos DB
-Access Latency (Old Data)	Yes	Blob retrieval in seconds
-Maintenance Overhead	Yes	Low – uses native Azure services
-Security / Compliance	Yes	Blob versioning, managed identity, RBAC, logging
+Feature / Constraint   Met?    Solution
+Simplicity             Yes     Serverless Azure Function, native storage solution
+No Data Loss / Downtime Yes    Gradual migration, no user impact
+API Contracts Unchanged Yes    Access logic is hidden, API remains the same
+Cost Optimization      Yes     Blob Storage is 90%+ cheaper than Cosmos DB
+Access Latency (Old Data) Yes  Blob retrieval in seconds
+Maintenance Overhead   Yes     Low - uses native Azure services
+Security / Compliance  Yes     Blob versioning, managed identity, RBAC, logging
 
 Optional Enhancements
-Enhancement	Description
-Blob Index Tags	Faster filtering/search for archived data
-Blob Lifecycle Policies	Auto-transition from Cool to Archive tier
-CDN/Edge Cache	Cache recently accessed cold data
-Observability (App Insights)	Monitor fallback access frequency/latency
-IaC (Bicep/Terraform)	Full infra deployment and config management
+Enhancement Description
+Blob Index Tags        Faster filtering/search for archived data
+Blob Lifecycle Policies Auto-transition from Cool to Archive tier
+CDN/Edge Cache         Cache recently accessed cold data
+Observability (App Insights) Monitor fallback access frequency/latency
+IaC (Bicep/Terraform)  Full infra deployment and config management
