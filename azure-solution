@@ -27,9 +27,64 @@ Over time, the Cosmos DB size has grown to over 2 million records (up to 300 KB 
 
 ---
 
+## Summary: Gradual Cleanup of Cosmos DB Records Older Than 90 Days
+
+| Feature / Constraint     | Met? | Solution                                                   |
+|-------------------------|-------|------------------------------------------------------------|
+| Simplicity               | Yes   | Serverless Azure Function, native Azure storage solution  |
+| No Data Loss / Downtime  | Yes   | Gradual migration with zero user impact                    |
+| API Contracts Unchanged  | Yes   | Access logic hidden inside middleware; API remains same    |
+| Cost Optimization        | Yes   | Blob Storage is 90%+ cheaper than Cosmos DB                |
+| Access Latency (Old Data)| Yes   | Blob retrieval within seconds                               |
+| Maintenance Overhead     | Yes   | Low — uses native Azure services                            |
+| Security / Compliance    | Yes   | Blob versioning, managed identity, RBAC, logging           |
+
+---
+
+## 💰 Cost Optimization Benefits
+
+| Service          | Optimization Strategy                      | Savings Type       |
+|------------------|-------------------------------------------|--------------------|
+| Cosmos DB        | Reduce size with TTL + archive             | Throughput & RU/s  |
+| Blob Storage     | Archive as JSON with Cool/Archive Tier     | Cheap per GB       |
+| Azure Functions  | Serverless — runs only on access            | Minimal Cost       |
+
+---
+
+## 🧠 Why This Works
+
+- **No downtime:** Seamless migration using background tasks.  
+- **No data loss:** Every record is moved, not deleted.  
+- **No API changes:** Read logic handles tiered lookups.  
+- **Simplicity:** Serverless + native Azure services only.  
+
+---
+
+## 📝 Optional Enhancements
+
+| Feature             | Description                                  |
+|---------------------|----------------------------------------------|
+| Index Blob metadata  | For faster lookups (filename = record ID)   |
+| Use ADLS Gen2       | For hierarchical file structure, advanced logging |
+| Cache old records   | Frequently accessed older data can be cached |
+
+---
+
+## ✅ Final Summary
+
+| Requirement      | Solution                                         |
+|------------------|-------------------------------------------------|
+| Simplicity       | Native Azure services only                        |
+| No Downtime      | Background archival + fallback reads             |
+| No Data Loss     | Full export to Blob before TTL deletion          |
+| No API Changes   | Abstracted in backend logic                       |
+| Cost Reduction   | Up to 70%+ storage savings on cold data          |
+
+---
+
 ## Implementation Details
 
-### Data Archival Process (run as a scheduled Azure Function)
+### Data Archival Process (scheduled Azure Function)
 
 - Query Cosmos DB for records older than 90 days.
 - Serialize and upload these records as blobs to Azure Blob Storage (cool/archive tier).
@@ -52,21 +107,3 @@ Copy
 Edit
 def write_billing_record(record):
     cosmosdb_write(record)
-
-Summary Table
-Feature / Constraint   Met?    Solution
-Simplicity             Yes     Serverless Azure Function, native storage solution
-No Data Loss / Downtime Yes    Gradual migration, no user impact
-API Contracts Unchanged Yes    Access logic is hidden, API remains the same
-Cost Optimization      Yes     Blob Storage is 90%+ cheaper than Cosmos DB
-Access Latency (Old Data) Yes  Blob retrieval in seconds
-Maintenance Overhead   Yes     Low - uses native Azure services
-Security / Compliance  Yes     Blob versioning, managed identity, RBAC, logging
-
-Optional Enhancements
-Enhancement Description
-Blob Index Tags        Faster filtering/search for archived data
-Blob Lifecycle Policies Auto-transition from Cool to Archive tier
-CDN/Edge Cache         Cache recently accessed cold data
-Observability (App Insights) Monitor fallback access frequency/latency
-IaC (Bicep/Terraform)  Full infra deployment and config management
