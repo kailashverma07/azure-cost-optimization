@@ -1,0 +1,68 @@
+# Azure Cost Optimization for Billing Records
+
+## Problem Statement
+
+We have a serverless Azure architecture storing billing records in Cosmos DB. The system is read-heavy, but records older than 3 months are rarely accessed.
+
+Over time, the Cosmos DB size has grown to over 2 million records (up to 300 KB each), causing high costs. We need a cost-optimized solution that preserves availability and API contracts, with no downtime or data loss.
+
+---
+
+## Proposed Solution Overview
+
+- Keep **recent records (≤ 90 days)** in Azure Cosmos DB (hot storage) for fast access.
+- Archive **older records (> 90 days)** in **Azure Blob Storage** using cool/archive tiers to reduce costs.
+- Implement an **Azure Function middleware** to route read/write requests:
+  - Writes always go to Cosmos DB.
+  - Reads first try Cosmos DB; if record is not found and is older than 90 days, fallback to Blob Storage.
+- This approach maintains existing APIs without changes.
+- No downtime or data loss during the migration.
+- Simple and maintainable.
+
+---
+
+## Architecture Diagram
+
+![Architecture Diagram](./architecture.svg)
+
+---
+
+## Implementation Details
+
+### Data Archival Process (run as a scheduled Azure Function)
+
+- Query Cosmos DB for records older than 90 days.
+- Serialize and upload these records as blobs to Azure Blob Storage (cool/archive tier).
+- Mark or delete archived records from Cosmos DB.
+
+### Read Flow (Azure Function Middleware)
+
+```python
+def get_billing_record(record_id):
+    record = cosmosdb_read(record_id)
+    if record:
+        return record
+    elif is_older_than_90_days(record_id):
+        return blob_storage_read(record_id)
+    else:
+        return None
+Write Flow (Azure Function Middleware)
+python
+Copy
+Edit
+def write_billing_record(record):
+    cosmosdb_write(record)
+Cost Optimization Strategies
+Use cool/archive tiers in Blob Storage for older data to minimize storage cost.
+
+Archive old records regularly to keep Cosmos DB size manageable.
+
+Use serverless Azure Functions to keep compute cost low.
+
+Implement TTL policies or lifecycle management in Blob Storage for very old data.
+
+Benefits
+Significant cost reduction by offloading cold data to cheaper storage.
+Zero downtime migration and no API changes.
+Maintains data availability with acceptable latency (seconds).
+Simple architecture easy to maintain and extend.
