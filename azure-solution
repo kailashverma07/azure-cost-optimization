@@ -52,17 +52,21 @@ Copy
 Edit
 def write_billing_record(record):
     cosmosdb_write(record)
-Cost Optimization Strategies
-Use cool/archive tiers in Blob Storage for older data to minimize storage cost.
 
-Archive old records regularly to keep Cosmos DB size manageable.
+Summary Table
+Feature / Constraint   Met?    Solution
+Simplicity             Yes     Serverless Azure Function, native storage solution
+No Data Loss / Downtime Yes    Gradual migration, no user impact
+API Contracts Unchanged Yes    Access logic is hidden, API remains the same
+Cost Optimization      Yes     Blob Storage is 90%+ cheaper than Cosmos DB
+Access Latency (Old Data) Yes  Blob retrieval in seconds
+Maintenance Overhead   Yes     Low - uses native Azure services
+Security / Compliance  Yes     Blob versioning, managed identity, RBAC, logging
 
-Use serverless Azure Functions to keep compute cost low.
-
-Implement TTL policies or lifecycle management in Blob Storage for very old data.
-
-Benefits
-Significant cost reduction by offloading cold data to cheaper storage.
-Zero downtime migration and no API changes.
-Maintains data availability with acceptable latency (seconds).
-Simple architecture easy to maintain and extend.
+Optional Enhancements
+Enhancement Description
+Blob Index Tags        Faster filtering/search for archived data
+Blob Lifecycle Policies Auto-transition from Cool to Archive tier
+CDN/Edge Cache         Cache recently accessed cold data
+Observability (App Insights) Monitor fallback access frequency/latency
+IaC (Bicep/Terraform)  Full infra deployment and config management
