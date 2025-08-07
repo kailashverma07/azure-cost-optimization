@@ -1,101 +1,109 @@
-# Azure Cost Optimization Solution – Billing Records in Serverless Architecture
+# Azure Cost Optimization for Billing Records
 
 ## Problem Statement
 
-We operate a serverless system in Azure with billing records stored in Azure Cosmos DB. It’s read-heavy, but records older than 3 months are rarely accessed. Cosmos DB costs have grown due to the 2M+ records, some as large as 300KB, and long-term retention requirements.
+We have a serverless Azure architecture storing billing records in Cosmos DB. The system is read-heavy, but records older than 3 months are rarely accessed.
 
-## Goals
+Over time, the Cosmos DB size has grown to over 2 million records (up to 300 KB each), causing high costs. We need a cost-optimized solution that preserves availability and API contracts, with no downtime or data loss.
 
-| Requirement                      | Description                                                                 |
-|----------------------------------|-----------------------------------------------------------------------------|
-| Simplicity                      | Easy to deploy & maintain                                                   |
-| No Data Loss / Downtime         | Seamless migration, no service disruption                                   |
-| No API Changes                  | Existing API read/write behavior must not change                            |
-| Cost Optimization               | Reduce Cosmos DB storage & RU/s cost                                        |
-| Cold Data Availability          | Archived records must still be retrievable within a few seconds             |
+---
 
-## Solution: Tiered Storage Using Azure Blob Storage
+## Proposed Solution Overview
 
-### Architecture Overview
+- Keep **recent records (≤ 90 days)** in Azure Cosmos DB (hot storage) for fast access.
+- Archive **older records (> 90 days)** in **Azure Blob Storage** using cool/archive tiers to reduce costs.
+- Implement an **Azure Function middleware** to route read/write requests:
+  - Writes always go to Cosmos DB.
+  - Reads first try Cosmos DB; if record is not found and is older than 90 days, fallback to Blob Storage.
+- This approach maintains existing APIs without changes.
+- No downtime or data loss during the migration.
+- Simple and maintainable.
+
+---
+
+## Architecture Diagram
 
 ![Architecture Diagram](./architecture.svg)
 
-## Cost Optimization Strategy
+---
 
-- Keep recent records (≤ 90 days) in Cosmos DB
-- Archive older records (> 90 days) in Azure Blob Storage (Cool/Archive Tier)
-- Implement fallback logic to serve old records from Blob if missing in Cosmos
+## Summary: Gradual Cleanup of Cosmos DB Records Older Than 90 Days
 
-## Archival Logic (Azure Function – Timer Trigger)
+| Feature / Constraint     | Met? | Solution                                                   |
+|-------------------------|-------|------------------------------------------------------------|
+| Simplicity               | Yes   | Serverless Azure Function, native Azure storage solution  |
+| No Data Loss / Downtime  | Yes   | Gradual migration with zero user impact                    |
+| API Contracts Unchanged  | Yes   | Access logic hidden inside middleware; API remains same    |
+| Cost Optimization        | Yes   | Blob Storage is 90%+ cheaper than Cosmos DB                |
+| Access Latency (Old Data)| Yes   | Blob retrieval within seconds                               |
+| Maintenance Overhead     | Yes   | Low — uses native Azure services                            |
+| Security / Compliance    | Yes   | Blob versioning, managed identity, RBAC, logging           |
 
-Use an Azure Function to periodically migrate old records:
+---
+
+## 💰 Cost Optimization Benefits
+
+| Service          | Optimization Strategy                      | Savings Type       |
+|------------------|-------------------------------------------|--------------------|
+| Cosmos DB        | Reduce size with TTL + archive             | Throughput & RU/s  |
+| Blob Storage     | Archive as JSON with Cool/Archive Tier     | Cheap per GB       |
+| Azure Functions  | Serverless — runs only on access            | Minimal Cost       |
+
+---
+
+## 🧠 Why This Works
+
+- **No downtime:** Seamless migration using background tasks.  
+- **No data loss:** Every record is moved, not deleted.  
+- **No API changes:** Read logic handles tiered lookups.  
+- **Simplicity:** Serverless + native Azure services only.  
+
+---
+
+## 📝 Optional Enhancements
+
+| Feature             | Description                                  |
+|---------------------|----------------------------------------------|
+| Index Blob metadata  | For faster lookups (filename = record ID)   |
+| Use ADLS Gen2       | For hierarchical file structure, advanced logging |
+| Cache old records   | Frequently accessed older data can be cached |
+
+---
+
+## ✅ Final Summary
+
+| Requirement      | Solution                                         |
+|------------------|-------------------------------------------------|
+| Simplicity       | Native Azure services only                        |
+| No Downtime      | Background archival + fallback reads             |
+| No Data Loss     | Full export to Blob before TTL deletion          |
+| No API Changes   | Abstracted in backend logic                       |
+| Cost Reduction   | Up to 70%+ storage savings on cold data          |
+
+---
+
+## Implementation Details
+
+### Data Archival Process (scheduled Azure Function)
+
+- Query Cosmos DB for records older than 90 days.
+- Serialize and upload these records as blobs to Azure Blob Storage (cool/archive tier).
+- Mark or delete archived records from Cosmos DB.
+
+### Read Flow (Azure Function Middleware)
 
 ```python
-from azure.cosmos import CosmosClient
-from azure.storage.blob import BlobServiceClient
-import datetime, json
-
-# Config
-COSMOS_CONTAINER = "billing"
-BLOB_CONTAINER = "cold-billing-records"
-ARCHIVE_AGE_DAYS = 90
-
-# Clients
-cosmos = CosmosClient.from_connection_string("COSMOS_CONN_STRING")
-blob_service = BlobServiceClient.from_connection_string("BLOB_CONN_STRING")
-
-def archive_old_records():
-    today = datetime.datetime.utcnow()
-    cutoff = today - datetime.timedelta(days=ARCHIVE_AGE_DAYS)
-    container = cosmos.get_database_client("db").get_container_client(COSMOS_CONTAINER)
-    
-    query = f"SELECT * FROM c WHERE c.timestamp < '{cutoff.isoformat()}'"
-    for record in container.query_items(query, enable_cross_partition_query=True):
-        record_id = record['id']
-        
-        # Archive to Blob
-        blob_client = blob_service.get_blob_client(container=BLOB_CONTAINER, blob=f"{record_id}.json")
-        blob_client.upload_blob(json.dumps(record), overwrite=True)
-        
-        # Delete from Cosmos
-        container.delete_item(record_id, partition_key=record['partitionKey'])
-Read Fallback Logic
+def get_billing_record(record_id):
+    record = cosmosdb_read(record_id)
+    if record:
+        return record
+    elif is_older_than_90_days(record_id):
+        return blob_storage_read(record_id)
+    else:
+        return None
+Write Flow (Azure Function Middleware)
 python
 Copy
 Edit
-def get_billing_record(record_id, partition_key):
-    try:
-        return cosmos_container.read_item(record_id, partition_key)
-    except NotFoundError:
-        blob_client = blob_service.get_blob_client(container=BLOB_CONTAINER, blob=f"{record_id}.json")
-        if blob_client.exists():
-            data = blob_client.download_blob().readall()
-            return json.loads(data)
-        else:
-            raise RecordNotFoundException()
-Zero Downtime Transition Plan
-Deploy new read logic with fallback to Blob Storage
-
-Start archival job (batch ≤ 10k/day)
-
-Enable monitoring
-
-Gradually clean Cosmos DB records >90 days
-
-Summary Table
-Feature / Constraint   Met?    Solution
-Simplicity             Yes     Serverless Azure Function, native storage solution
-No Data Loss / Downtime Yes    Gradual migration, no user impact
-API Contracts Unchanged Yes    Access logic is hidden, API remains the same
-Cost Optimization      Yes     Blob Storage is 90%+ cheaper than Cosmos DB
-Access Latency (Old Data) Yes  Blob retrieval in seconds
-Maintenance Overhead   Yes     Low - uses native Azure services
-Security / Compliance  Yes     Blob versioning, managed identity, RBAC, logging
-
-Optional Enhancements
-Enhancement Description
-Blob Index Tags        Faster filtering/search for archived data
-Blob Lifecycle Policies Auto-transition from Cool to Archive tier
-CDN/Edge Cache         Cache recently accessed cold data
-Observability (App Insights) Monitor fallback access frequency/latency
-IaC (Bicep/Terraform)  Full infra deployment and config management
+def write_billing_record(record):
+    cosmosdb_write(record)
