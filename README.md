@@ -18,21 +18,7 @@ We operate a serverless system in Azure with billing records stored in Azure Cos
 
 ### Architecture Overview
 
-+----------------+ +----------------+ +------------------------+
-| API Layer | ----> | Azure Function | ----> | Azure Cosmos DB (Hot) |
-| (No changes) | | (Middleware) | | (≤ 3 months data) |
-+----------------+ +----------------+ +------------------------+
-|
-| (miss on Cosmos DB)
-v
-+------------------------+
-| Azure Blob Storage |
-| (Cool or Archive Tier) |
-+------------------------+
-
-python
-Copy
-Edit
+![Architecture Diagram](./architecture.svg)
 
 ## Cost Optimization Strategy
 
